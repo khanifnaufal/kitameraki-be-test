@@ -1,33 +1,62 @@
-import { CosmosClient } from "@azure/cosmos";
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-
+import { PatchOperation } from "@azure/cosmos";
+import { cosmosClient, DATABASE_NAME, CONTAINER_NAME } from "../config/cosmosClient";
+import { Task } from "../models/task.model";
 
 export async function UpdateTask(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const body = await request.json() as object;
+    context.log(`Http function processed request for url "${request.url}"`);
+
     const taskId = request.query.get('id');
     const organizationId = request.query.get('organizationId');
 
-    let patchRequests = [];
-
-    for (let key in body) {
-        patchRequests.push({
-            "op": "replace",
-            "path": `/${key}`,
-            "value": body[key]
-        });
+    if (!taskId || !organizationId) {
+        return {
+            status: 400,
+            jsonBody: { error: "Missing required query parameters: id, organizationId" }
+        };
     }
 
-    const client = new CosmosClient("this is a connection string");
-    const createdTask = await client.database("TaskApp")
-        .container("Tasks")
-        .item(taskId, organizationId)
-        .patch(patchRequests);
+    let body: Partial<Task>;
+    try {
+        body = await request.json() as Partial<Task>;
+    } catch {
+        return {
+            status: 400,
+            jsonBody: { error: "Invalid JSON body" }
+        };
+    }
 
-    return { jsonBody: createdTask.resource, status: 200 };
-};
+    const now = new Date().toISOString();
+    const updatePayload: Partial<Task> = { ...body, updatedAt: now };
+
+    const patchOperations: PatchOperation[] = Object.entries(updatePayload).map(([key, value]) => ({
+        op: "replace",
+        path: `/${key}`,
+        value
+    }));
+
+    try {
+        const { resource } = await cosmosClient
+            .database(DATABASE_NAME)
+            .container(CONTAINER_NAME)
+            .item(taskId, organizationId)
+            .patch<Task>(patchOperations);
+
+        return {
+            status: 200,
+            jsonBody: resource
+        };
+    } catch (error) {
+        context.log("Error in UpdateTask:", error);
+        return {
+            status: 500,
+            jsonBody: { error: "Internal server error" }
+        };
+    }
+}
 
 app.http('UpdateTask', {
-    methods: ['POST'],
+    methods: ['PATCH'],
     authLevel: 'anonymous',
     handler: UpdateTask
 });

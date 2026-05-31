@@ -1,18 +1,41 @@
-import { CosmosClient } from "@azure/cosmos";
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import { cosmosClient, DATABASE_NAME, CONTAINER_NAME } from "../config/cosmosClient";
+import { Task } from "../models/task.model";
 
 export async function GetTasks(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Http function processed request for url "${request.url}"`);
+
     const organizationId = request.query.get('organizationId');
 
-    const client = new CosmosClient("this is a connection string");
-    const task = await client.database("TaskApp")
-        .container("Tasks")
-        .items.query(`SELECT * FROM c WHERE c.organizationId = '${organizationId}'`)
-        .fetchNext();
+    if (!organizationId) {
+        return {
+            status: 400,
+            jsonBody: { error: "Missing required query parameter: organizationId" }
+        };
+    }
 
-    return { jsonBody: task.resources, status: 200 };
-};
+    try {
+        const { resources } = await cosmosClient
+            .database(DATABASE_NAME)
+            .container(CONTAINER_NAME)
+            .items.query<Task>({
+                query: "SELECT * FROM c WHERE c.organizationId = @organizationId",
+                parameters: [{ name: "@organizationId", value: organizationId }]
+            })
+            .fetchAll();
+
+        return {
+            status: 200,
+            jsonBody: resources
+        };
+    } catch (error) {
+        context.log("Error in GetTasks:", error);
+        return {
+            status: 500,
+            jsonBody: { error: "Internal server error" }
+        };
+    }
+}
 
 app.http('GetTasks', {
     methods: ['GET'],
