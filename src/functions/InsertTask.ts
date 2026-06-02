@@ -29,7 +29,8 @@ export async function InsertTask(request: HttpRequest, context: InvocationContex
         title: body.title,
         status: body.status,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        type: 'task'
     };
 
     try {

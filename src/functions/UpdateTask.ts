@@ -30,7 +30,7 @@ export async function UpdateTask(request: HttpRequest, context: InvocationContex
     const updatePayload: Partial<Task> = { ...body, updatedAt: now };
 
     const patchOperations: PatchOperation[] = Object.entries(updatePayload).map(([key, value]) => ({
-        op: "replace",
+        op: "set",
         path: `/${key}`,
         value
     }));

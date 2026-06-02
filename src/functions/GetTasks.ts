@@ -19,7 +19,7 @@ export async function GetTasks(request: HttpRequest, context: InvocationContext)
             .database(DATABASE_NAME)
             .container(CONTAINER_NAME)
             .items.query<Task>({
-                query: "SELECT * FROM c WHERE c.organizationId = @organizationId",
+                query: "SELECT * FROM c WHERE c.organizationId = @organizationId AND (NOT IS_DEFINED(c.type) OR c.type = 'task')",
                 parameters: [{ name: "@organizationId", value: organizationId }]
             })
             .fetchAll();
